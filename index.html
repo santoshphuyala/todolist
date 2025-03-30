@@ -34,14 +34,16 @@
         <button class="btn btn-secondary" onclick="sendEmail()">Email Todo List</button>
         <button class="btn btn-success" onclick="markAllCompleted()">Mark All Completed</button>
         <button class="btn btn-danger" onclick="deleteAllTasks()">Delete All</button>
+        <button class="btn btn-warning" onclick="undoLastAction()">Undo</button>
     </div>
 
     <script>
+        let lastAction = null;
+
         document.addEventListener("DOMContentLoaded", function() {
             loadTasks();
             let today = moment().format('YYYY-MM-DD');
             document.getElementById("taskDate").value = today;
-            checkReminderDate();
         });
 
         function sendEmail() {
@@ -67,6 +69,7 @@
                 return;
             }
             let tasks = JSON.parse(localStorage.getItem("tasks")) || [];
+            lastAction = JSON.stringify(tasks);
             tasks.push({ text: taskText, date: dueDate, completed: false });
             localStorage.setItem("tasks", JSON.stringify(tasks));
             taskInput.value = "";
@@ -95,6 +98,7 @@
 
         function markAllCompleted() {
             let tasks = JSON.parse(localStorage.getItem("tasks")) || [];
+            lastAction = JSON.stringify(tasks);
             tasks.forEach(task => task.completed = true);
             localStorage.setItem("tasks", JSON.stringify(tasks));
             loadTasks();
@@ -102,8 +106,20 @@
 
         function deleteAllTasks() {
             if (confirm("Are you sure you want to delete all tasks?")) {
+                let tasks = JSON.parse(localStorage.getItem("tasks")) || [];
+                lastAction = JSON.stringify(tasks);
                 localStorage.removeItem("tasks");
                 loadTasks();
+            }
+        }
+
+        function undoLastAction() {
+            if (lastAction) {
+                localStorage.setItem("tasks", lastAction);
+                lastAction = null;
+                loadTasks();
+            } else {
+                alert("No recent actions to undo.");
             }
         }
 
