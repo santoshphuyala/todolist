@@ -34,6 +34,7 @@
             loadTasks();
             let today = moment().format('YYYY-MM-DD');
             document.getElementById("taskDate").value = today;
+            checkReminderDate();
         });
 
         function addTask() {
@@ -70,6 +71,38 @@
                 `;
                 taskList.appendChild(taskItem);
             });
+        }
+
+        function checkReminderDate() {
+            let lastReminder = localStorage.getItem("lastReminder");
+            let today = moment().format('YYYY-MM-DD');
+            if (lastReminder !== today) {
+                remindPendingTasks();
+                localStorage.setItem("lastReminder", today);
+            }
+        }
+
+        function remindPendingTasks() {
+            let tasks = JSON.parse(localStorage.getItem("tasks")) || [];
+            tasks.forEach((task, index) => {
+                if (!task.completed) {
+                    let response = confirm(`Task: "${task.text}" is pending. Mark as completed?`);
+                    if (response) {
+                        markCompleted(index);
+                    } else {
+                        let postpone = prompt("When will you complete this task? (Enter days, e.g., 2 for 2 days, or YYYY-MM-DD for a specific date)");
+                        if (postpone) {
+                            if (!isNaN(postpone)) {
+                                task.date = moment().add(parseInt(postpone), 'days').format('YYYY-MM-DD');
+                            } else {
+                                task.date = postpone;
+                            }
+                            localStorage.setItem("tasks", JSON.stringify(tasks));
+                        }
+                    }
+                }
+            });
+            loadTasks();
         }
 
         function markCompleted(index) {
