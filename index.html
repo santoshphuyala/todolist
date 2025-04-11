@@ -77,8 +77,34 @@
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
-                    <input type="text" id="editTaskInput" class="form-control" aria-label="Edit task description">
-                    <div class="invalid-feedback">Task cannot be empty.</div>
+                    <div class="mb-3">
+                        <label for="editTaskInput" class="form-label">Task Description</label>
+                        <input type="text" id="editTaskInput" class="form-control" aria-label="Edit task description">
+                        <div class="invalid-feedback">Task cannot be empty.</div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="editTaskCategory" class="form-label">Category</label>
+                        <select id="editTaskCategory" class="form-select" aria-label="Edit task category">
+                            <option value="General">General</option>
+                            <option value="Work">Work</option>
+                            <option value="Personal">Personal</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="editTaskPriority" class="form-label">Priority</label>
+                        <select id="editTaskPriority" class="form-select" aria-label="Edit task priority">
+                            <option value="low">Low</option>
+                            <option value="medium">Medium</option>
+                            <option value="high">High</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="editTaskDate" class="form-label">Due Date</label>
+                        <div class="input-group">
+                            <input type="date" id="editTaskDate" class="form-control" aria-label="Edit due date">
+                            <button class="btn btn-secondary btn-sm" id="editClearDateBtn">Clear Date</button>
+                        </div>
+                    </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
@@ -110,7 +136,7 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/2.4.9/purify.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/2.5.6/purify.min.js" integrity="sha512-WqUXS3XzR/4WNa4s+DjQd6zO7Wepg3jBqzCtoblzU2IAjdK9W8D7Y2AHb0Qz3JIuGL4cXWoS5T8q3IN0A9tkLTVQ==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
     <script>
 (function () {
     // State management
@@ -124,6 +150,15 @@
 
     let loadTasksTimeout = null;
     let currentEditIndex = null;
+
+    // Fallback sanitization if DOMPurify fails
+    function sanitizeInput(input) {
+        if (window.DOMPurify && typeof window.DOMPurify.sanitize === 'function') {
+            return DOMPurify.sanitize(input);
+        }
+        // Basic fallback: strip HTML tags
+        return input.replace(/<[^>]+>/g, '');
+    }
 
     // Initialize
     document.addEventListener("DOMContentLoaded", () => {
@@ -159,6 +194,7 @@
         document.getElementById("redoBtn").addEventListener("click", redoAction);
         document.getElementById("saveEditBtn").addEventListener("click", saveEditedTask);
         document.getElementById("sendEmailConfirmBtn").addEventListener("click", sendEmail);
+        document.getElementById("editClearDateBtn").addEventListener("click", () => document.getElementById("editTaskDate").value = "");
 
         // Keyboard navigation for buttons
         document.querySelectorAll(".btn").forEach(btn => {
@@ -180,6 +216,7 @@
         } catch (e) {
             console.error("Failed to save tasks:", e);
             alert("Unable to save tasks. Please check your browser settings.");
+            throw e;
         }
     }
 
@@ -189,7 +226,6 @@
     function saveState() {
         state.history.push(JSON.stringify(state.tasks));
         state.redoStack = [];
-        saveTasks();
     }
 
     /**
@@ -208,17 +244,22 @@
         }
         taskInput.classList.remove("is-invalid");
 
-        saveState();
-        state.tasks.push({
-            text: DOMPurify.sanitize(taskText),
-            date: taskDate || null,
-            category,
-            priority,
-            completed: false
-        });
-        saveTasks();
-        resetInputs();
-        loadTasks();
+        try {
+            saveState();
+            state.tasks.push({
+                text: sanitizeInput(taskText),
+                date: taskDate || null,
+                category,
+                priority,
+                completed: false
+            });
+            saveTasks();
+            resetInputs();
+            loadTasks();
+        } catch (e) {
+            console.error("Failed to add task:", e);
+            alert("Failed to add task. Please try again.");
+        }
     }
 
     /**
@@ -294,38 +335,65 @@
      * @param {number} index - Index of the task.
      */
     function markCompleted(index) {
-        saveState();
-        state.tasks[index].completed = !state.tasks[index].completed;
-        saveTasks();
-        loadTasks();
+        try {
+            saveState();
+            state.tasks[index].completed = !state.tasks[index].completed;
+            saveTasks();
+            loadTasks();
+        } catch (e) {
+            console.error("Failed to mark task completed:", e);
+            alert("Failed to update task. Please try again.");
+        }
     }
 
     /**
-     * Opens the edit task modal.
+     * Opens the edit task modal and populates fields.
      * @param {number} index - Index of the task.
      */
     function editTask(index) {
         currentEditIndex = index;
-        document.getElementById("editTaskInput").value = state.tasks[index].text;
-        document.getElementById("editTaskInput").classList.remove("is-invalid");
+        const task = state.tasks[index];
+        const editInput = document.getElementById("editTaskInput");
+        editInput.value = task.text;
+        editInput.classList.remove("is-invalid");
+        document.getElementById("editTaskCategory").value = task.category;
+        document.getElementById("editTaskPriority").value = task.priority;
+        document.getElementById("editTaskDate").value = task.date || "";
         new bootstrap.Modal(document.getElementById("editTaskModal")).show();
     }
 
     /**
-     * Saves the edited task.
+     * Saves the edited task with all fields.
      */
     function saveEditedTask() {
         const editInput = document.getElementById("editTaskInput");
         const newText = editInput.value.trim();
+        const newCategory = document.getElementById("editTaskCategory").value;
+        const newPriority = document.getElementById("editTaskPriority").value;
+        const newDate = document.getElementById("editTaskDate").value;
+
         if (!newText) {
             editInput.classList.add("is-invalid");
             return;
         }
-        saveState();
-        state.tasks[currentEditIndex].text = DOMPurify.sanitize(newText);
-        saveTasks();
-        loadTasks();
-        bootstrap.Modal.getInstance(document.getElementById("editTaskModal")).hide();
+
+        try {
+            saveState();
+            state.tasks[currentEditIndex] = {
+                ...state.tasks[currentEditIndex],
+                text: sanitizeInput(newText),
+                category: newCategory,
+                priority: newPriority,
+                date: newDate || null
+            };
+            saveTasks();
+            loadTasks();
+            bootstrap.Modal.getInstance(document.getElementById("editTaskModal")).hide();
+        } catch (e) {
+            console.error("Failed to save edited task:", e);
+            editInput.classList.add("is-invalid");
+            alert("Failed to save task. Please try again.");
+        }
     }
 
     /**
@@ -333,20 +401,30 @@
      * @param {number} index - Index of the task.
      */
     function deleteTask(index) {
-        saveState();
-        state.tasks.splice(index, 1);
-        saveTasks();
-        loadTasks();
+        try {
+            saveState();
+            state.tasks.splice(index, 1);
+            saveTasks();
+            loadTasks();
+        } catch (e) {
+            console.error("Failed to delete task:", e);
+            alert("Failed to delete task. Please try again.");
+        }
     }
 
     /**
      * Marks all tasks as completed.
      */
     function markAllCompleted() {
-        saveState();
-        state.tasks.forEach(task => task.completed = true);
-        saveTasks();
-        loadTasks();
+        try {
+            saveState();
+            state.tasks.forEach(task => task.completed = true);
+            saveTasks();
+            loadTasks();
+        } catch (e) {
+            console.error("Failed to mark all tasks completed:", e);
+            alert("Failed to update tasks. Please try again.");
+        }
     }
 
     /**
@@ -354,10 +432,15 @@
      */
     function deleteAllTasks() {
         if (confirm("Are you sure you want to delete all tasks?")) {
-            saveState();
-            state.tasks = [];
-            saveTasks();
-            loadTasks();
+            try {
+                saveState();
+                state.tasks = [];
+                saveTasks();
+                loadTasks();
+            } catch (e) {
+                console.error("Failed to delete all tasks:", e);
+                alert("Failed to delete tasks. Please try again.");
+            }
         }
     }
 
@@ -366,10 +449,15 @@
      */
     function undoAction() {
         if (state.history.length > 0) {
-            state.redoStack.push(JSON.stringify(state.tasks));
-            state.tasks = JSON.parse(state.history.pop());
-            saveTasks();
-            loadTasks();
+            try {
+                state.redoStack.push(JSON.stringify(state.tasks));
+                state.tasks = JSON.parse(state.history.pop());
+                saveTasks();
+                loadTasks();
+            } catch (e) {
+                console.error("Failed to undo action:", e);
+                alert("Failed to undo. Please try again.");
+            }
         } else {
             alert("No actions to undo.");
         }
@@ -380,10 +468,15 @@
      */
     function redoAction() {
         if (state.redoStack.length > 0) {
-            state.history.push(JSON.stringify(state.tasks));
-            state.tasks = JSON.parse(state.redoStack.pop());
-            saveTasks();
-            loadTasks();
+            try {
+                state.history.push(JSON.stringify(state.tasks));
+                state.tasks = JSON.parse(state.redoStack.pop());
+                saveTasks();
+                loadTasks();
+            } catch (e) {
+                console.error("Failed to redo action:", e);
+                alert("Failed to redo. Please try again.");
+            }
         } else {
             alert("No actions to redo.");
         }
@@ -394,22 +487,27 @@
      * @param {string} criteria - Sorting criteria ("date" or "priority").
      */
     function sortTasks(criteria) {
-        document.querySelectorAll(".btn-info").forEach(btn => btn.classList.remove("active"));
-        document.getElementById(`sort${criteria.charAt(0).toUpperCase() + criteria.slice(1)}Btn`).classList.add("active");
-        saveState();
-        state.tasks.sort((a, b) => {
-            if (criteria === "date") {
-                const dateA = a.date ? new Date(a.date) : new Date("9999-12-31");
-                const dateB = b.date ? new Date(b.date) : new Date("9999-12-31");
-                return dateA - dateB;
-            }
-            if (criteria === "priority") {
-                const order = { high: 3, medium: 2, low: 1 };
-                return order[b.priority] - order[a.priority];
-            }
-        });
-        saveTasks();
-        loadTasks();
+        try {
+            document.querySelectorAll(".btn-info").forEach(btn => btn.classList.remove("active"));
+            document.getElementById(`sort${criteria.charAt(0).toUpperCase() + criteria.slice(1)}Btn`).classList.add("active");
+            saveState();
+            state.tasks.sort((a, b) => {
+                if (criteria === "date") {
+                    const dateA = a.date ? new Date(a.date) : new Date("9999-12-31");
+                    const dateB = b.date ? new Date(b.date) : new Date("9999-12-31");
+                    return dateA - dateB;
+                }
+                if (criteria === "priority") {
+                    const order = { high: 3, medium: 2, low: 1 };
+                    return order[b.priority] - order[a.priority];
+                }
+            });
+            saveTasks();
+            loadTasks();
+        } catch (e) {
+            console.error("Failed to sort tasks:", e);
+            alert("Failed to sort tasks. Please try again.");
+        }
     }
 
     /**
