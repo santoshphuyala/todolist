@@ -622,7 +622,7 @@
     }
 
     /**
-     * Restores the task list from an uploaded JSON file.
+     * Restores tasks from a JSON file, merging with existing tasks and removing duplicates.
      */
     function restoreData(event) {
         const file = event.target.files[0];
@@ -638,8 +638,8 @@
                     throw new Error("Invalid backup format: must be an array.");
                 }
 
-                // Validate and sanitize restored tasks
-                const validTasks = restoredData.map(task => ({
+                // Sanitize and normalize restored tasks
+                const sanitizedRestoredTasks = restoredData.map(task => ({
                     text: sanitizeInput(task.text || ""),
                     date: task.date && typeof task.date === "string" ? task.date : null,
                     category: ["General", "Work", "Personal"].includes(task.category) ? task.category : "General",
@@ -647,17 +647,47 @@
                     completed: typeof task.completed === "boolean" ? task.completed : false
                 })).filter(task => task.text.trim() !== "");
 
-                if (validTasks.length === 0) {
+                if (sanitizedRestoredTasks.length === 0) {
                     throw new Error("No valid tasks found in backup.");
                 }
 
+                // Merge existing and restored tasks, removing duplicates
+                const taskMap = new Map();
+                // Add existing tasks first (prioritize current state)
+                state.tasks.forEach(task => {
+                    const key = JSON.stringify({
+                        text: task.text,
+                        date: task.date,
+                        category: task.category,
+                        priority: task.priority,
+                        completed: task.completed
+                    });
+                    taskMap.set(key, task);
+                });
+                // Add restored tasks, skipping duplicates
+                sanitizedRestoredTasks.forEach(task => {
+                    const key = JSON.stringify({
+                        text: task.text,
+                        date: task.date,
+                        category: task.category,
+                        priority: task.priority,
+                        completed: task.completed
+                    });
+                    if (!taskMap.has(key)) {
+                        taskMap.set(key, task);
+                    }
+                });
+
+                // Convert back to array
+                const mergedTasks = Array.from(taskMap.values());
+
                 saveState();
-                state.tasks = validTasks;
+                state.tasks = mergedTasks;
                 state.history = []; // Reset history to avoid conflicts
                 state.redoStack = [];
                 saveTasks();
                 loadTasks();
-                alert("Data restored successfully!");
+                alert(`Data restored successfully! ${sanitizedRestoredTasks.length} tasks processed, ${mergedTasks.length - state.tasks.length} new tasks added.`);
             } catch (e) {
                 console.error("Failed to restore data:", e);
                 alert("Failed to restore data. Please ensure the file is a valid Todo List backup.");
