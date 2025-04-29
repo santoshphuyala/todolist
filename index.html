@@ -139,7 +139,7 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/2.5.6/purify.min.js" integrity="sha512-WqUXS3XzR/4WNa4s+DjQd6zO7Wepg3jBqzCtoblzU2IAjdK9W8D7Y2AHb0Qz3JIuGL4cXWoS5T8q3IN0A9tkLTVQ==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.6/purify.min.js" integrity="sha512-nWahyAlT+fnLozwYgJdfS5X7KZ5LpaRA39uz1z2IuXstE2rpG1SwnRZNHtwfH0GTx31ByKaTfkWPIep2QnEw==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
     <script>
 (function () {
     // State management
@@ -653,28 +653,30 @@
 
                 // Merge existing and restored tasks, removing duplicates
                 const taskMap = new Map();
+                
+                // Helper function to create a unique key for a task (excluding 'completed' status)
+                const createTaskKey = (task) => JSON.stringify({
+                    text: task.text,
+                    date: task.date,
+                    category: task.category,
+                    priority: task.priority
+                });
+
                 // Add existing tasks first (prioritize current state)
                 state.tasks.forEach(task => {
-                    const key = JSON.stringify({
-                        text: task.text,
-                        date: task.date,
-                        category: task.category,
-                        priority: task.priority,
-                        completed: task.completed
-                    });
+                    const key = createTaskKey(task);
                     taskMap.set(key, task);
                 });
-                // Add restored tasks, skipping duplicates
+
+                // Add restored tasks, skipping duplicates (based on key)
                 sanitizedRestoredTasks.forEach(task => {
-                    const key = JSON.stringify({
-                        text: task.text,
-                        date: task.date,
-                        category: task.category,
-                        priority: task.priority,
-                        completed: task.completed
-                    });
+                    const key = createTaskKey(task);
                     if (!taskMap.has(key)) {
                         taskMap.set(key, task);
+                    } else {
+                        // If a duplicate is found, update the 'completed' status
+                        const existingTask = taskMap.get(key);
+                        existingTask.completed = existingTask.completed || task.completed;
                     }
                 });
 
@@ -687,7 +689,7 @@
                 state.redoStack = [];
                 saveTasks();
                 loadTasks();
-                alert(`Data restored successfully! ${sanitizedRestoredTasks.length} tasks processed, ${mergedTasks.length - state.tasks.length} new tasks added.`);
+                alert(`Data restored successfully! ${sanitizedRestoredTasks.length} tasks processed, ${mergedTasks.length - (state.tasks.length - sanitizedRestoredTasks.length)} new tasks added.`);
             } catch (e) {
                 console.error("Failed to restore data:", e);
                 alert("Failed to restore data. Please ensure the file is a valid Todo List backup.");
@@ -699,5 +701,6 @@
     }
 })();
     </script>
+    <script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'93782d3a7afaafc0',t:'MTc0NTg2MDI2NC4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script>
 </body>
 </html>
